@@ -54,6 +54,11 @@ monotonic by construction, and 1.7e15 is far below 2^53.
 - Consequence: once `agent: "goose"` is stuck on a pane, only a herdr restart or
   the pane really running an agent again will clear it. My tests left exactly
   such a residue on w1:p1, release does not remove it, and this file says so.
+- Follow-up at 18:27: the residue is gone, because the workspace that carried it
+  (w1) had been closed and the new workspace (w2) started clean. That is not
+  evidence that a restart cleans a *restored* pane: the pane that carried the
+  residue did not come back. The value the bridge shows on w2:p1 is its own, at
+  `revision` 2. Restore-behaviour for a sticky value remains untested.
 
 ## 4. Detection: two false positives, then the title-and-screen rule
 
@@ -111,6 +116,24 @@ Two consequences:
    `bin/autostart.js` now does exactly one thing: ask herdr to open the plugin's
    watcher pane, then exit.
 
+**Verified at 18:27**, on a real server restart (`server shutdown initiated`,
+then `herdr server started … pid=36020` at 10:27:45.429Z):
+
+```
+10:27:45.429675  herdr server started api_socket=...\herdr.sock
+10:27:45.438279  client connected client_id=2 ... surface_active=true
+10:27:45.556982  api request received method="plugin.pane.open" request_id="cli:plugin"
+10:27:45.591949  pane child spawned pane_id=2 pid=21280
+```
+
+127 ms after the API socket came up, and 118 ms after the terminal client
+connected, a `cli:plugin` request opened the watcher pane (w2:p2, pid 21280,
+label `goose bridge`). No human types that fast, so this was the startup hook:
+the question left open in the previous session is answered **yes**. The restored
+goose pane (w2:p1, `terminal_title` `🪿 goose`) was picked up by the new watcher
+on its own, and `pane list` shows `agent: "goose"` at `revision` 2 — matching the
+two reports the watcher logged (`(none) -> working`, then `working -> idle`).
+
 ## 6. A plugin pane is the right home for the long-lived process
 
 ```
@@ -140,9 +163,12 @@ The watcher also skips its own pane by comparing against `HERDR_PANE_ID`
 
 ## 7. Smaller observations
 
-- A reported `idle` can display as `done` in `pane list` (both were seen in
-  separate runs). The mapping is not understood; [guess] it depends on whether a
-  client is attached. It does not affect the bridge.
+- A reported `idle` can display as `done` in `pane list` (seen in both forms
+  across runs, `done` on w2:p1 at 18:29). The mapping is not understood; [guess]
+  it depends on whether a client is attached. It does not affect the bridge.
+- The watcher skips itself in a new workspace without being told (observed:
+  `own pane w2:p2`), and `w2:p2` carries no `agent` field in `pane list` — the
+  self-report guard holds across a restart.
 - Releasing a pane that has already been closed returns a `pane_not_found` error.
   That is treated as "nothing to release", not as a failure, and logged as such.
 - The child of `pane.close` exits with code 3221225786 (0xC000013A =
@@ -150,9 +176,9 @@ The watcher also skips its own pane by comparing against `HERDR_PANE_ID`
 
 ## 8. Still unverified
 
-- Whether the startup hook really opens the watcher tab after a restart or a live
-  handoff. Verifying it means restarting herdr, which would disturb the user's
-  session, so it was left alone.
+- Live handoff (a new server taking over while a client stays attached) is still
+  untested. The docs say the startup hook runs there too; only a full restart has
+  been observed (see §5).
 - Whether goose's interactive turn keeps redrawing the TUI (token stream, elapsed
   line) and therefore keeps the output hash changing, so the pane sticks at
   `working` forever. Only the quiet case (`idle`) was verified. If it happens, the

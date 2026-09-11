@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 268" width="880" height="268" role="img" aria-label="A goose pane is recognised by the goose bridge watcher pane, which reports idle, working or blocked to Herdr through pane report-agent">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#4f8cff"/>
+    </marker>
+  </defs>
+
+  <rect width="880" height="268" fill="#0f1115"/>
+
+  <text x="32" y="44" fill="#e8ebf2" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="21" font-weight="700">herdr-goose-bridge</text>
+  <text x="32" y="67" fill="#8b93a7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12">agent state for goose panes in Herdr — no core changes, no wrapper, no input injection</text>
+
+  <rect x="32" y="96" width="248" height="136" rx="10" fill="#171a21" stroke="#2c313c" stroke-width="1.5"/>
+  <text x="50" y="124" fill="#e8ebf2" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700">goose pane w1:p3</text>
+  <text x="50" y="148" fill="#8b93a7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5">foreground: powershell.exe</text>
+  <text x="50" y="168" fill="#8b93a7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5">title: goose</text>
+  <text x="50" y="188" fill="#8b93a7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5">screen: goose is ready</text>
+  <text x="50" y="212" fill="#c9a227" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5">Herdr alone sees: unknown</text>
+
+  <line x1="286" y1="164" x2="322" y2="164" stroke="#4f8cff" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <rect x="326" y="96" width="248" height="136" rx="10" fill="#171a21" stroke="#2c313c" stroke-width="1.5"/>
+  <text x="344" y="124" fill="#e8ebf2" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700">goose bridge pane</text>
+  <text x="344" y="148" fill="#8b93a7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5">plugin pane, tab w1:t4</text>
+  <text x="344" y="168" fill="#8b93a7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5">poll 2s, hash the screen</text>
+  <text x="344" y="188" fill="#8b93a7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5">quiet 6s means idle</text>
+  <text x="344" y="212" fill="#7fb069" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5">reports only on change</text>
+
+  <line x1="580" y1="164" x2="616" y2="164" stroke="#4f8cff" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <rect x="620" y="96" width="228" height="136" rx="10" fill="#171a21" stroke="#2c313c" stroke-width="1.5"/>
+  <text x="638" y="124" fill="#e8ebf2" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700">Herdr pane badge</text>
+  <text x="638" y="148" fill="#8b93a7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5">agent: goose</text>
+  <text x="638" y="168" fill="#8b93a7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5">status: working</text>
+  <text x="638" y="188" fill="#8b93a7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5">status: idle</text>
+  <text x="638" y="212" fill="#8b93a7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5">status: blocked</text>
+
+  <text x="32" y="254" fill="#6f7787" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5">herdr pane report-agent PANE --source custom:goose --agent goose --state STATE --seq N</text>
+</svg>

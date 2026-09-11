@@ -1,0 +1,43 @@
+id = "goose.bridge"
+name = "goose state bridge"
+version = "0.2.0"
+min_herdr_version = "0.9.0"
+description = "Report goose agent lifecycle state (idle/working/blocked) into Herdr panes"
+platforms = ["linux", "macos", "windows"]
+
+# One-shot hook: opens the watcher pane below, then exits.
+# Herdr runs [[startup]] once per enabled plugin after the session is restored
+# and the API socket is ready — not when a plugin is linked or enabled, so a
+# freshly linked plugin needs one herdr restart (or a manual pane open).
+[[startup]]
+command = ["node", "bin/autostart.js"]
+platforms = ["linux", "macos", "windows"]
+
+# The actual watcher. A plugin pane, not a daemon in a startup hook.
+# Open/close manually with:
+#   herdr plugin pane open --plugin goose.bridge --entrypoint watcher --placement tab --no-focus
+#   herdr plugin pane close ...
+[[panes]]
+id = "watcher"
+title = "goose bridge"
+placement = "tab"
+command = ["node", "bin/bridge.js"]
+platforms = ["linux", "macos", "windows"]
+
+[[actions]]
+id = "probe"
+title = "goose bridge: dry run (print what it sees)"
+contexts = ["workspace"]
+command = ["node", "bin/bridge.js", "--dry-run"]
+
+[[actions]]
+id = "release"
+title = "goose bridge: release all goose state authority"
+contexts = ["workspace"]
+command = ["node", "bin/release-all.js"]
+
+[[actions]]
+id = "watch"
+title = "goose bridge: open the watcher tab"
+contexts = ["workspace"]
+command = ["node", "bin/autostart.js"]

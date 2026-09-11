@@ -1,0 +1,33 @@
+{
+  "name": "herdr-goose-bridge",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Herdr plugin that reports goose agent lifecycle state (idle/working/blocked) into Herdr panes",
+  "license": "MIT",
+  "type": "commonjs",
+  "homepage": "https://github.com/inoribea/herdr-goose-bridge#readme",
+  "bugs": {
+    "url": "https://github.com/inoribea/herdr-goose-bridge/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/inoribea/herdr-goose-bridge.git"
+  },
+  "keywords": [
+    "herdr",
+    "herdr-plugin",
+    "goose",
+    "agent-state"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "check": "npm run syntax && npm run verify",
+    "syntax": "node --check bin/bridge.js && node --check bin/autostart.js && node --check bin/release-all.js",
+    "verify": "node scripts/verify.mjs",
+    "probe": "node bin/bridge.js --dry-run",
+    "release-all": "node bin/release-all.js",
+    "autostart": "node bin/autostart.js"
+  }
+}

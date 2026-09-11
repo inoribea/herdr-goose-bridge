@@ -1,0 +1,3 @@
+# Herdr runs the plugin scripts on every platform; keep the checkout LF so the
+# same bytes reach Linux, macOS and Windows.
+* text=auto eol=lf

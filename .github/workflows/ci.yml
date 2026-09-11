@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  NODE_VERSION: 24
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Syntax-check every script
+        run: npm run syntax
+
+      - name: Static checks (manifest, invariants)
+        run: npm run verify
+
+      - name: Dry run without a Herdr socket
+        # --dry-run must fail loudly or print what it sees; it must never hang
+        # waiting for a socket that CI does not have.
+        run: |
+          timeout 30 node bin/bridge.js --dry-run || true

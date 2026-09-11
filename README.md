@@ -129,6 +129,25 @@ Set these on the watcher pane (or in the shell that starts it).
 - Not a `herdr integration install` target: goose has no herdr screen manifest,
   which would be core work, not plugin work.
 
+## Marketplace listing
+
+Herdr's plugin marketplace indexes public GitHub repositories that carry the
+GitHub topic `herdr-plugin` and at least one `herdr-plugin.toml` with parseable
+required metadata on the default branch. There is no submission form and no
+review queue: the index refreshes every 30 minutes, and a repository is rescanned
+when its default-branch head changes. Forks and archived repositories are
+excluded.
+
+This repository is tagged, so it needs no further step to be listed, and it is
+installable straight from GitHub:
+
+```bash
+herdr plugin install inoribea/herdr-goose-bridge
+```
+
+A listing is discovery, not endorsement — the marketplace says the same about
+itself, and the trust guidance applies before installing anything.
+
 ## Origin
 
 Written against the herdr plugin API as documented at

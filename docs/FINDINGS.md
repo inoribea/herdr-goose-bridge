@@ -218,3 +218,76 @@ after the run.
   prompt.
 - Whether goose has a native lifecycle hook that could replace this heuristic
   state machine at all.
+
+## 10. Marketplace listing and the GitHub install
+
+Observed 2026-09-11 on herdr 0.9.0 (Windows), Node 24.
+
+**Listing.** The repository is on [herdr.dev/plugins](https://herdr.dev/plugins/),
+under "New to the herd":
+
+```
+inoribea/herdr-goose-bridge
+Herdr plugin that reports goose agent lifecycle state (idle / working / blocked)
+into your panes. goose is a line-mode CLI, so Herdr cannot detect it on its own.
+✦ joined 27m ago ★0
+```
+
+That matches the published index rules: public repository, GitHub topic
+`herdr-plugin`, at least one `herdr-plugin.toml` with parseable required metadata
+on the default branch, one card per repository, refresh every 30 minutes, rescan
+when the default-branch head changes, forks and archived repositories excluded
+([herdr.dev/docs/marketplace](https://herdr.dev/docs/marketplace/)).
+
+**Install.** `herdr plugin install inoribea/herdr-goose-bridge --yes` was replayed
+end to end with the plugin data directory pointed at a throwaway directory, so
+this machine's own linked plugin was left alone (checked afterwards: `herdr plugin
+list` still showed all four plugins, with goose.bridge linked from the local
+checkout). No herdr server was running:
+
+```
+Plugin install preview:
+  id: goose.bridge
+  name: goose state bridge
+  version: 0.2.1
+  source: inoribea/herdr-goose-bridge
+  commit: 6390d8409e8a93c9bfdf61fccc68165c361ab8c9
+  actions: 3
+  startup commands: 1
+  events: 0
+  panes: 1
+  link handlers: 0
+  build commands: 0
+    startup: node bin/autostart.js
+    action probe: node bin/bridge.js --dry-run
+    action release: node bin/release-all.js
+    action watch: node bin/autostart.js
+    pane watcher: node bin/bridge.js
+Installed goose.bridge from inoribea/herdr-goose-bridge.
+```
+
+`herdr plugin list` then reported
+`- goose.bridge (goose state bridge) enabled [github:inoribea/herdr-goose-bridge@6390d8409e8a93c9bfdf61fccc68165c361ab8c9]`
+— the resolved commit, not the requested ref — and the checkout landed in
+`<data dir>/plugins/github/goose.bridge-f5f980f35af9`. Install registered the
+plugin enabled with no server running.
+
+**A local link beats a GitHub install.** Replaying the install while the same
+plugin id was linked from a checkout is refused, with the reason in the message:
+
+```
+Error: Custom { kind: Other, error: "plugin goose.bridge is already linked from a local path; uninstall/unlink it before installing from GitHub" }
+```
+
+**Unlink needs a server; link does not.** `herdr plugin link <checkout>` registered
+with no server running; `herdr plugin unlink goose.bridge` did not:
+
+```
+{"id":"cli:plugin","error":{"code":"server_not_running","message":"no herdr server is running at <data dir>/herdr.sock; run `herdr` to start or attach it"}}
+```
+
+So leaving a linked checkout for the marketplace install needs a running Herdr for
+the first step. Still unverified here: `--ref` pinning, the interactive
+confirmation prompt (`--yes` was passed, and the preview printed anyway),
+`min_herdr_version` rejection against an older binary, and `plugin action invoke`
+or `plugin log`, which need a server this session did not have.

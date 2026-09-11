@@ -18,6 +18,11 @@ pane list before:  {"pane_id":"w1:p3","agent_status":"unknown", ...}
 pane list after:   {"pane_id":"w1:p3","agent":"goose","agent_status":"done", ...}
 ```
 
+Install: `herdr plugin install inoribea/herdr-goose-bridge` — the plugin is
+listed on the [Herdr plugin marketplace](https://herdr.dev/plugins/). What that
+does, and what to do on a machine that linked its own checkout, is under
+[Install](#install).
+
 ## How it recognises goose
 
 1. **Foreground process** (`herdr pane process-info`): `name` / `argv0` / `argv[0]`
@@ -58,17 +63,90 @@ hook only opens the pane; `[[panes]] watcher` is the daemon.
 - Herdr ≥ 0.9.0 (built and verified against 0.9.0, protocol 22)
 - Node ≥ 22 (verified on v24; the plugin calls the `herdr` binary through
   `HERDR_BIN_PATH`, so no herdr libraries are needed)
+- `git` on `PATH` for `herdr plugin install`, which clones the repository
+## Install
 
-## Install / run
+Two ways in: from the marketplace, or from a checkout you are editing. Herdr
+will not let one machine have both at once ([below](#switching-between-the-two)).
 
-Replace the path with this checkout.
+### From the marketplace
+
+```powershell
+herdr plugin install inoribea/herdr-goose-bridge
+```
+
+`plugin install` takes GitHub shorthand only (`owner/repo[/subdir...]`), clones
+with `git`, and prints the manifest it is about to register, including every
+command it will run:
+
+```
+Plugin install preview:
+  id: goose.bridge
+  name: goose state bridge
+  version: 0.2.1
+  source: inoribea/herdr-goose-bridge
+  commit: 6390d8409e8a93c9bfdf61fccc68165c361ab8c9
+  actions: 3
+  startup commands: 1
+  events: 0
+  panes: 1
+  link handlers: 0
+  build commands: 0
+    startup: node bin/autostart.js
+    action probe: node bin/bridge.js --dry-run
+    action release: node bin/release-all.js
+    action watch: node bin/autostart.js
+    pane watcher: node bin/bridge.js
+```
+
+Add `--yes` for a non-interactive install (the preview is printed either way),
+or `--ref <commit|tag>` to pin a revision. The manifest declares no build
+commands, so nothing is installed with npm, and the plugin is registered
+enabled. `herdr plugin list` then reports the resolved commit, not the ref that
+was asked for:
+
+```
+- goose.bridge (goose state bridge) enabled [github:inoribea/herdr-goose-bridge@6390d8409e8a93c9bfdf61fccc68165c361ab8c9]
+```
+
+The clone lands in Herdr's plugin data; `herdr plugin config-dir goose.bridge`
+prints the config directory next to it, and `HERDR_PLUGIN_ROOT` /
+`HERDR_PLUGIN_CONFIG_DIR` hold the same two things inside a plugin command.
+Herdr refuses an install whose `min_herdr_version` is newer than the running
+binary, so a Herdr below 0.9.0 rejects this plugin instead of half-installing it.
+
+### From a checkout (development)
 
 ```powershell
 herdr plugin link C:\path\to\herdr-goose-bridge
-herdr plugin list                        # → goose.bridge enabled
+herdr plugin list    # → goose.bridge enabled [local:C:\path\to\herdr-goose-bridge]
+```
 
-# start it now (the startup hook only runs on the next herdr server start)
-node C:\path\to\herdr-goose-bridge\bin\autostart.js
+`plugin link` registers the working directory in place: no clone, no build
+commands.
+
+### Switching between the two
+
+Herdr refuses a GitHub install over a plugin that is linked from a local path,
+and the message names the reason:
+
+```
+Error: Custom { kind: Other, error: "plugin goose.bridge is already linked from a local path; uninstall/unlink it before installing from GitHub" }
+```
+
+So a machine that linked its own checkout reaches the marketplace install through
+`herdr plugin unlink goose.bridge` — and that step needs a running Herdr
+**server**, unlike `plugin install` and `plugin link`, which both register while
+no server is running. `herdr plugin uninstall <id-or-source>` instead removes the
+managed checkout too.
+
+### Start it
+
+The startup hook runs on the next Herdr server start, so a freshly registered
+plugin needs one kick. These need a running server:
+
+```powershell
+herdr plugin action invoke goose.bridge.watch
 # or from the UI: plugin action "goose bridge: open the watcher tab"
 # or directly:
 herdr plugin pane open --plugin goose.bridge --entrypoint watcher --placement tab --no-focus
@@ -77,19 +155,37 @@ herdr plugin pane open --plugin goose.bridge --entrypoint watcher --placement ta
 The watcher then lives in a tab titled **goose bridge** and prints its state
 transitions there. `herdr plugin log list` stays empty, so read that pane.
 
-Dry run / cleanup:
+### Update / remove
+
+There is no `plugin update` in plugin v1: reinstall from GitHub to refresh the
+managed checkout.
+
+```powershell
+herdr plugin install inoribea/herdr-goose-bridge --yes   # update in place
+herdr plugin uninstall inoribea/herdr-goose-bridge       # remove (the id works too)
+```
+
+### Dry run, release and cleanup
+
+The manifest's actions call the same scripts, so no path or checkout layout is
+needed — only a running server:
+
+```powershell
+herdr plugin action invoke goose.bridge.probe     # dry run: print what it sees
+herdr plugin action invoke goose.bridge.release   # release goose state on every pane
+```
+
+In a checkout the scripts still run standalone, no herdr and no server required:
 
 ```powershell
 node bin\bridge.js --dry-run
 node bin\release-all.js
-```
-
-Static checks (no herdr, no network, no dependencies):
-
-```powershell
 npm run check     # node --check on every script + the invariant checks
 ```
 
+The install, the refusal and the unlink error above are replayed outputs, in
+[docs/FINDINGS.md §10](docs/FINDINGS.md); `--ref` pinning is documented, not
+replayed.
 ## Configuration (environment)
 
 Set these on the watcher pane (or in the shell that starts it).
@@ -131,23 +227,27 @@ Set these on the watcher pane (or in the shell that starts it).
 
 ## Marketplace listing
 
-Herdr's plugin marketplace indexes public GitHub repositories that carry the
-GitHub topic `herdr-plugin` and at least one `herdr-plugin.toml` with parseable
-required metadata on the default branch. There is no submission form and no
-review queue: the index refreshes every 30 minutes, and a repository is rescanned
-when its default-branch head changes. Forks and archived repositories are
-excluded.
+This plugin is listed on [herdr.dev/plugins](https://herdr.dev/plugins/): a
+repository card for `inoribea/herdr-goose-bridge` with a manifest row of
+`goose state bridge` 0.2.1. Herdr's plugin marketplace indexes public GitHub
+repositories that carry the topic `herdr-plugin` and at least one
+`herdr-plugin.toml` with parseable required metadata on the default branch.
+There is no submission form and no review queue: the index refreshes every 30
+minutes, and a repository is rescanned when its default-branch head changes.
+Forks and archived repositories are excluded. A card records the manifest path,
+`id`, `name`, `version`, `platforms` and `min_herdr_version` together with the
+exact default-branch commit it read
+([how the index works](https://herdr.dev/docs/marketplace/)).
 
-This repository is tagged, so it needs no further step to be listed, and it is
-installable straight from GitHub:
-
-```bash
-herdr plugin install inoribea/herdr-goose-bridge
-```
+That refresh window is also the lag to expect after a push: `herdr plugin
+install` clones the default-branch head immediately, while the listing catches
+up on the next refresh. This repository already carried the topic and a valid
+manifest, so appearing needed no further step — the install command is the one
+in [Install](#from-the-marketplace).
 
 A listing is discovery, not endorsement — the marketplace says the same about
-itself, and the trust guidance applies before installing anything.
-
+itself, and the [trust guidance](https://herdr.dev/docs/plugins/#trust-and-security)
+applies before installing anything.
 ## Origin
 
 Written against the herdr plugin API as documented at

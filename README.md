@@ -28,8 +28,11 @@ does, and what to do on a machine that linked its own checkout, is under
 1. **Foreground process** (`herdr pane process-info`): `name` / `argv0` / `argv[0]`
    basename matched against `GOOSE_BRIDGE_PROC`. Catches full-screen agents.
 2. **Title + screen** (the path that actually works for goose today): the pane
-   title matches `GOOSE_BRIDGE_TITLE` (`goose` → `🪿 goose`) **and** the screen
-   contains goose's UI markers (`goose is ready`, `Enter to send`, `(O)>` …).
+   title matches `GOOSE_BRIDGE_TITLE` **and** the screen contains goose's UI
+   markers (`goose is ready`, `Enter to send`, `(O)>` …). goose titles its pane
+   with its own emoji plus the directory it runs in — `🪿 code` in a `code`
+   directory, `🪿 goose` in one called `goose` — so the default pattern matches
+   the emoji, not the directory name.
    Two factors on purpose: when goose exits, its title may linger but the screen
    goes back to a shell prompt, so the pane gets released instead of lying.
 3. Pane-record fields, optional cmdline match (`GOOSE_BRIDGE_MATCH_CMDLINE=1`),
@@ -210,7 +213,7 @@ Set these on the watcher pane (or in the shell that starts it).
 | `GOOSE_BRIDGE_SOURCE` | `custom:goose` | `--source`; keep stable, it keys the seq watermark |
 | `GOOSE_BRIDGE_AGENT` | `goose` | `--agent` label |
 | `GOOSE_BRIDGE_PROC` | `^(goose\|goose\.exe\|goosed\|goosed\.exe)$` | basename regex for the foreground program |
-| `GOOSE_BRIDGE_TITLE` | `goose` | pane-title regex (one of the two detection factors) |
+| `GOOSE_BRIDGE_TITLE` | `🪿\|goose` | pane-title regex (one of the two detection factors); goose's pane title is its emoji plus the session's directory name |
 | `GOOSE_BRIDGE_SCREEN_PATTERN` | `goose is ready\|Enter to send\|Ctrl\+J newline\|\( ?O\)>` | markers required for a title-only match |
 | `GOOSE_BRIDGE_SCREEN` | `0` | `1` = read every pane's screen, not just title matches |
 | `GOOSE_BRIDGE_MATCH_CMDLINE` | `0` | `1` = also match `process-info` cmdlines (wrapper launches) |

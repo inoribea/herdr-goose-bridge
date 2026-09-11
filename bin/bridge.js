@@ -20,7 +20,8 @@
  *      — required on Windows: goose is a line-mode CLI, its process does not
  *        appear in process-info (verified 2026-09-11: while a goose session was
  *        live, foreground_processes still listed only powershell.exe), but
- *        terminal_title becomes "🪿 goose".
+ *        terminal_title becomes goose's own emoji plus the session's directory
+ *        ("🪿 code" in a `code` directory, §13).
  *   3. pane-record fields (legacy), optional cmdline match, optional full scan.
  */
 'use strict';
@@ -64,8 +65,14 @@ const CFG = {
   procPattern:
     process.env.GOOSE_BRIDGE_PROC || '^(goose|goose\\.exe|goosed|goosed\\.exe)$',
   // pane title pattern. ON by default: on Windows goose never shows up in
-  // process-info, only in the pane title.
-  titlePattern: process.env.GOOSE_BRIDGE_TITLE || 'goose',
+  // process-info, only in the pane title. goose titles its pane with its own
+  // emoji plus the directory it runs in: "\u{1FABF} code" in a `code`
+  // directory, "\u{1FABF} goose" in a `goose` one (verified, docs/FINDINGS.md
+  // §13). Matching only the word therefore worked for sessions that happened to
+  // live in a directory called goose and missed every other one. The emoji is
+  // the invariant part, so it is matched too; the word stays for titles that
+  // carry it. \u{1FABF} is the goose emoji.
+  titlePattern: process.env.GOOSE_BRIDGE_TITLE || '\u{1FABF}|goose',
   // screen markers required for a title-only match, so a stale title after
   // goose exits releases the pane instead of lying forever
   screenPattern:

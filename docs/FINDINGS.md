@@ -13,7 +13,7 @@ documentation; the command and the relevant output are attached to each claim.
 | Does `release-agent` reset the high-water mark? | No. |
 | Does release clear the displayed agent name? | No. The last known value stays on the pane and no CLI command clears it (`clear-agent-authority` is socket-only). |
 | Can goose be recognised by its foreground process name? | **No.** On Windows goose is a line-mode CLI; the foreground process stays `powershell.exe`. |
-| What works instead? | A pane title of `🪿 goose` **and** goose's UI markers on the screen (two factors). |
+| What works instead? | A pane title carrying goose's own emoji (`🪿 <directory>`) **and** goose's UI markers on the screen (two factors) — the pattern was the bare word `goose` until §13 corrected it. |
 | Can `[[startup]]` host the long-lived watcher? | **No.** The docs say a startup hook is one-shot and not a place for daemons. |
 | Where does the long-lived process live? | In a `[[panes]]` plugin pane (here: w1:p6, in its own tab). |
 | Plugin logs | `herdr plugin log list` stayed empty for the whole session, down to the plugin's own pane. |
@@ -386,3 +386,70 @@ a herdr pane, so end-to-end detection could not be replayed:
 $ node bin/bridge.js --dry-run
 [goose-bridge]   w3:p1 goose=false title="kumax: C:\\Users\\kumax\\code" screen=true
 ```
+
+## 13. goose's pane title is the goose emoji plus the directory name
+
+§4 established that on Windows the recognisable half of goose is its pane title
+**plus** its screen markers, and set `GOOSE_BRIDGE_TITLE` to the bare word
+`goose`. Replayed on 2026-09-12 with two live sessions in two different
+directories: the title is goose's own emoji followed by the basename of the
+session's cwd. The original `🪿 goose` in §4 was a session that happened to run
+in a directory called `goose`; in any other directory the title carries no word
+the default pattern could match, so the rule never fired:
+
+```
+$ herdr pane list                     # two live goose sessions, two cwds
+w3:p4  unknown  🪿 code               # cwd C:\Users\kumax\code
+w3:p5  unknown  🪿 goose              # cwd %TEMP%\goose
+
+$ node bin/bridge.js --dry-run        # plugin 0.2.2, default title pattern "goose"
+[goose-bridge]   w3:p1 goose=false title="kumax: C:\\Users\\kumax\\code" screen=true
+[goose-bridge]   w3:p5 goose=true  title="🪿 goose" screen=true
+[goose-bridge]   w3:p4 goose=false title="🪿 code"  screen=true
+        ← only the session living in a directory named goose was recognised, and
+          herdr showed both panes as agent:"" agent_status:"unknown"
+```
+
+Both panes were started for this replay with
+`herdr pane split --cwd <dir>` followed by
+`herdr pane run <pane> goose.exe session`, and closed again afterwards. The
+`goose.exe session -r` in WezTerm is the author's own session, which this bridge
+never sees (§12).
+
+**Fix.** The default title pattern matches goose's own emoji (`\u{1FABF}`) as
+well as the word, so the invariant part of the title is what is checked and the
+directory name stops deciding. The title factor keeps working as the second half
+of the two-factor rule: when goose exits, the shell prompt repaints the title
+without the emoji — `kumax: C:\Users\kumax\code` above — so the pane is released
+instead of lying. Replayed after the fix, watcher pane restarted to load it:
+
+```
+$ node bin/bridge.js --dry-run
+[goose-bridge]   w3:p5 goose=true  title="🪿 goose" screen=true
+[goose-bridge]   w3:p4 goose=true  title="🪿 code"  screen=true
+[goose-bridge]   w3:p1 goose=false title="kumax: C:\\Users\\kumax\\code" screen=true
+        ← the pane whose goose session had already closed stays unrecognised
+
+$ herdr pane read <watcher pane> --source recent --lines 20
+[goose-bridge] w3:p5: first sight, waiting for the screen to settle before guessing
+[goose-bridge] w3:p4: first sight, waiting for the screen to settle before guessing
+[goose-bridge] w3:p5: (none) -> idle
+[goose-bridge] w3:p4: (none) -> idle
+
+$ herdr pane get w3:p4
+{"agent":"goose","agent_status":"idle","cwd":"C:\\Users\\kumax\\code",
+ "terminal_title":"🪿 code","revision":3,…}
+
+$ herdr pane close w3:p4 ; herdr pane close w3:p5
+[goose-bridge] w3:p5: gone (nothing to release)
+[goose-bridge] w3:p4: gone (nothing to release)
+```
+
+This is the first replay in this file where a goose pane actually carried
+`agent: "goose"` through the bridge rather than through a hand-run
+`report-agent`.
+
+**Still open.** Whether goose's title survives when a session exits without the
+shell repainting its prompt (a killed pane, a shell that prints nothing after
+goose returns). That is the false-positive case for the two-factor rule and it
+has not been observed either way.

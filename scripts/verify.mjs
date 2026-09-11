@@ -20,6 +20,9 @@
  *   7. The startup hook proves a pane is running the watcher before believing
  *      a pane title: herdr restores a plugin pane as a plain shell wearing the
  *      same title, which shipped as "watcher already open" and a dead bridge.
+ *   8. The default title pattern carries goose's own emoji: goose titles its
+ *      pane with that emoji plus the directory name, so a pattern of just
+ *      "goose" only ever matched sessions running in a directory called goose.
  */
 
 import { existsSync, readFileSync } from 'node:fs';
@@ -167,6 +170,16 @@ check('autostart: a pane title is not proof that the watcher is running', () => 
   assert(
     /PLUGIN_ROOT/.test(source) && /'close'/.test(source),
     'bin/autostart.js closes leftover panes without a plugin-root check; it would close any pane that happens to wear the title',
+  );
+});
+
+check('detection: the default title pattern carries goose\'s own marker', () => {
+  const source = read(BRIDGE);
+  const pattern = /GOOSE_BRIDGE_TITLE\s*\|\|\s*'((?:[^'\\]|\\.)*)'/.exec(source);
+  assert(pattern, `could not find the default GOOSE_BRIDGE_TITLE in ${BRIDGE}`);
+  assert(
+    /1FABF|🪿/.test(pattern[1]),
+    `the default title pattern is "${pattern[1]}"; goose titles its pane "\u{1FABF} <directory>", so a pattern without the emoji only matches sessions that happen to run in a directory named goose`,
   );
 });
 

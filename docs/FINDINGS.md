@@ -1,83 +1,117 @@
-# goose-bridge 实测结论（2026-09-11，herdr 0.9.0 / Windows / goose 1.50）
+# goose-bridge findings (2026-09-11, herdr 0.9.0 / Windows / goose 1.50)
 
-全部结论都在这台机器上跑出来过，不是读文档推的。命令与输出要点附在每条后面。
+Every claim below was produced on this machine. None of it is inferred from
+documentation; the command and the relevant output are attached to each claim.
 
-## 结论速览
+## Summary
 
-| 问题 | 结论 |
+| Question | Answer |
 | --- | --- |
-| 外部进程能代别的 pane 上报吗 | 能，`pane_id` 是普通过位置参数 |
-| 上报的状态会显示吗 | 会，`herdr pane list` 立刻出现 `agent` / `agent_status` |
-| `--seq` 语义 | 每 (pane, source, agent) 一条持久高水位线；≤ 它的上报被静默丢弃 |
-| release 会重置高水位线吗 | 不会 |
-| release 会清掉界面上的 agent 名吗 | 不会，最后已知值一直挂着；CLI 里**没有** clear-agent-authority |
-| 靠前台进程名能认出 goose 吗 | **不能**（Windows 上 goose 是行模式 CLI，前台仍是 powershell.exe） |
-| 那靠什么认 | pane 标题变成 `🪿 goose` + 屏幕里有 goose 的界面标记（双因子） |
-| `[[startup]]` 能放常驻 watcher 吗 | **不能**，文档明确说 startup 是一次性钩子，不是守护进程的地方 |
-| 常驻进程放哪 | `[[panes]]` 插件 pane（本次：tab 里的 w1:p6） |
-| 插件日志 | `herdr plugin log list` 全程为空，连插件 pane 都没有记录 |
+| Can an external process report state for another pane? | Yes. `pane_id` is an ordinary positional argument. |
+| Does the reported state show up? | Yes. `herdr pane list` gains `agent` / `agent_status` immediately. |
+| `--seq` semantics | A persistent high-water mark per (pane, source, agent); any report at or below it is silently dropped. |
+| Does `release-agent` reset the high-water mark? | No. |
+| Does release clear the displayed agent name? | No. The last known value stays on the pane and no CLI command clears it (`clear-agent-authority` is socket-only). |
+| Can goose be recognised by its foreground process name? | **No.** On Windows goose is a line-mode CLI; the foreground process stays `powershell.exe`. |
+| What works instead? | A pane title of `🪿 goose` **and** goose's UI markers on the screen (two factors). |
+| Can `[[startup]]` host the long-lived watcher? | **No.** The docs say a startup hook is one-shot and not a place for daemons. |
+| Where does the long-lived process live? | In a `[[panes]]` plugin pane (here: w1:p6, in its own tab). |
+| Plugin logs | `herdr plugin log list` stayed empty for the whole session, down to the plugin's own pane. |
 
-## 1. 跨 pane 上报成立
+## 1. Cross-pane reporting works
 
 ```
 herdr pane report-agent w1:p1 --source custom:goose --agent goose --state working --seq 100
 herdr pane list   → {"agent":"goose","agent_status":"working", ...}
 ```
-schema 佐证：`PaneReportAgentParams.required = [pane_id, source, agent, state]`，
-`PaneAgentState.enum = [idle, working, blocked, unknown]`。
 
-## 2. `--seq` 是持久高水位线，release 不重置
+The schema agrees: `PaneReportAgentParams.required = [pane_id, source, agent,
+state]` and `PaneAgentState.enum = [idle, working, blocked, unknown]`.
+
+## 2. `--seq` is a persistent high-water mark, and release does not reset it
 
 ```
 report working --seq 100   → working
 release-agent
-report idle    --seq 50    → 被忽略，仍是 working
+report idle    --seq 50    → ignored, the pane stays working
 ```
-所以：进程重启后如果 seq 从 1 重数，**上报会被永久丢弃**。
-修法：`seq = max(seq+1, Date.now()*1000)`（毫秒时间戳构造上单调，1.7e15 < 2^53）。
 
-## 3. release 不清显示值，也没有 CLI 能清
+So a process that restarts its counter at 1 has its reports **dropped forever**.
+The fix is `seq = max(seq + 1, Date.now() * 1000)`: a millisecond timestamp is
+monotonic by construction, and 1.7e15 is far below 2^53.
 
-- release 前后 `revision` 都是 3，`agent` / `agent_status` 都还在 → 交回的是**生命周期权威**，不是显示值。
-- `herdr pane report-metadata --clear-display-agent --clear-state-labels` 跑了，没报错也没效果（那是 metadata 层，另一回事）。
-- `clear-agent-authority` **只在 socket API 里**，`herdr pane` 和 `herdr api` 都没有这个子命令（`herdr api` 只有 snapshot / schema）。
-- 所以：pane 上如果留了 `agent: "goose"`，只能等 herdr 重启或该 pane 真的再跑一次 agent 流程。我测试期间在 w1:p1 上留了这样的残留，release 无效，已如实说明。
+## 3. Release does not clear the displayed value, and nothing in the CLI can
 
-## 4. 检测：踩过两次假阳性，最后是靠标题
+- `revision` was 3 before and after the release, with `agent` / `agent_status`
+  still on the pane. What is handed back is the **lifecycle authority**, not the
+  displayed value.
+- `herdr pane report-metadata --clear-display-agent --clear-state-labels` ran
+  without an error and had no visible effect. That is the metadata layer, a
+  different thing.
+- `clear-agent-authority` exists **only in the socket API**. Neither
+  `herdr pane` nor `herdr api` has that subcommand (`herdr api` only has
+  `snapshot` and `schema`).
+- Consequence: once `agent: "goose"` is stuck on a pane, only a herdr restart or
+  the pane really running an agent again will clear it. My tests left exactly
+  such a residue on w1:p1, release does not remove it, and this file says so.
 
-第一次错在拿整个 `process-info` JSON 的所有字符串比 basename：
+## 4. Detection: two false positives, then the title-and-screen rule
+
+The first mistake was comparing every string of the whole `process-info` JSON
+against the basename pattern:
+
 ```
 foreground: powershell.exe
-cwd: C:\Users\inori\goose\        ← basenameLike() → "goose" → 命中 ^goose$
+cwd: C:\Users\inori\goose\        ← basenameLike() → "goose" → matched ^goose$
 ```
-第二次错在 pane 记录的 `agent` 字段（它回显上次上报的 agent 名，会永远自我匹配）。
 
-**真 goose 实测**（split 一个临时 pane，里面跑真 goose）：
+The second mistake was reading the pane record's `agent` field, which echoes the
+last reported agent name and therefore matches the pane against itself forever.
+
+**A real goose session** (a throwaway split pane running goose):
+
 ```
-foreground=["powershell.exe", ...]        ← goose 跑起来了，前台进程还是 powershell
-terminal_title="🪿 goose"                 ← 但标题变了
-屏幕:   __( O)>  ● new session · custom_deepseek deepseek-v4-flash
+foreground=["powershell.exe", ...]        ← goose is running; the foreground process is still powershell
+terminal_title="🪿 goose"                 ← but the title changed
+screen: __( O)>  ● new session · custom_deepseek deepseek-v4-flash
         goose is ready / ⏳ loading extensions / > Enter to send · Ctrl+J newline
 ```
-结论：**Windows 上 goose 的进程名进不了 foreground_processes**（行模式 CLI，不是全屏 TUI 接管控制台），
-只能靠「标题命中 + 屏幕标记命中」双因子认它。已按此重写检测逻辑，实测：
+
+Conclusion: **on Windows, goose's process name never reaches
+`foreground_processes`** (it is a line-mode CLI, not a full-screen TUI that takes
+over the console), so the only way to recognise it is a title match **plus** a
+screen-marker match. The detection logic was rewritten on that basis and
+measured:
+
 ```
-w1:p3 goose=true title="🪿 goose" screen=true     （真 goose 在跑）
-w1:p1 goose=false title="管理员: ...powershell.exe" screen=false（同目录，不误报）
-w1:p6 goose=false title="" screen=false           （watcher 自己的 pane，node.exe）
+w1:p3 goose=true  title="🪿 goose" screen=true                    (a real goose session)
+w1:p1 goose=false title="Administrator: ...powershell.exe" screen=false  (same cwd, no false positive)
+w1:p6 goose=false title="" screen=false                            (the watcher's own pane, node.exe)
 ```
-屏幕双因子的副作用正好是好事：goose 退出后标题可能还留着，但屏幕恢复 shell 提示符 → 判定为非法 → 自动 release。
 
-## 5. `[[startup]]` 的语义（官方文档原文）
+The second factor has a useful side effect: when goose exits its title can
+linger, but the screen goes back to a shell prompt, which is not a goose screen,
+so the pane gets released instead of misreported.
 
-> `[[startup]]` commands run once for each enabled plugin after Herdr restores the session and its API socket is ready. They run again when a new server takes over during live handoff, but not when a client attaches, config reloads, or **a plugin is linked or enabled**.
-> A startup hook is not a place for long-running daemons … A hook should restore plugin-owned state, call any required Herdr APIs, and exit.
+## 5. What `[[startup]]` actually means (quoted from the official docs)
 
-两个后果：
-1. 插件刚 link 完 startup **不会**跑（本机 herdr server 10:01 启动，插件是之后链的，所以一直没跑）→ 需要一次 herdr 重启才会自动跑。
-2. 常驻的东西不该塞在 startup 里 → 改成：startup 钩子 `bin/autostart.js` 只做一件事——让 herdr 打开插件 pane，然后退出。
+> `[[startup]]` commands run once for each enabled plugin after Herdr restores
+> the session and its API socket is ready. They run again when a new server takes
+> over during live handoff, but not when a client attaches, config reloads, or
+> **a plugin is linked or enabled**.
+> A startup hook is not a place for long-running daemons … A hook should restore
+> plugin-owned state, call any required Herdr APIs, and exit.
 
-## 6. 插件 pane 才是长驻进程的正确位置
+Two consequences:
+
+1. A freshly linked plugin does **not** run its startup hook. (Here the herdr
+   server started at 10:01 and the plugin was linked later, so it never ran at
+   all until a herdr restart.)
+2. A long-lived process does not belong in a startup hook. The hook
+   `bin/autostart.js` now does exactly one thing: ask herdr to open the plugin's
+   watcher pane, then exit.
+
+## 6. A plugin pane is the right home for the long-lived process
 
 ```
 [[panes]]
@@ -88,25 +122,43 @@ command = ["node", "bin/bridge.js"]
 
 herdr plugin pane open --plugin goose.bridge --entrypoint watcher --placement tab --no-focus
 ```
-实测：开出一个 tab（w1:p6，label "goose bridge"），watcher 在里面常驻，日志直接打在 pane 屏幕上
-（`herdr plugin log list` 一直是空的，所以排查只能看屏幕）。
 
-`autostart.js` 幂等双重保险，实测第二次调用输出
-`watcher already running (pid 37092); nothing to do`，没有开第二个 pane：
-- pid 文件：`%LOCALAPPDATA%\herdr\plugins\goose.bridge\goose-bridge-watcher.pid`（=HERDR_PLUGIN_STATE_DIR），顺便做存活检查
-- 标签检查：`herdr pane list` 里已经有 label 为 "goose bridge" 的 pane
+Measured: this opens a tab (w1:p6, label `goose bridge`), the watcher lives in it,
+and its log goes straight to the pane screen — `herdr plugin log list` was empty
+the whole time, so the pane screen is the only place to debug.
 
-watcher 自己会跳过自己（`HERDR_PANE_ID` 对比，实测 `own pane w1:p6`）。
+`autostart.js` is idempotent two ways over. A second call printed
+`watcher already running (pid 37092); nothing to do` and did not open a second
+pane:
 
-## 7. 杂项观察
+- a pid file at `%LOCALAPPDATA%\herdr\plugins\goose.bridge\goose-bridge-watcher.pid`
+  (= `HERDR_PLUGIN_STATE_DIR`), also used as a liveness check, and
+- a label check: a pane labelled `goose bridge` already exists in `herdr pane list`.
 
-- 上报 `idle` 时，`pane list` 里显示的可能是 `done`（两次实测分别见到 `idle` 和 `done`）。显示值的映射规则没查清，标[猜测]：与是否有客户端 attached 有关。对桥本身无影响。
-- pane 关闭后再 release 会返回 `pane_not_found` 错误 → 已按「不是错误」处理并打日志。
-- `pane.close` 时子进程退出码 3221225786（0xC000013A = STATUS_CONTROL_C_EXIT），正常。
+The watcher also skips its own pane by comparing against `HERDR_PANE_ID`
+(observed: `own pane w1:p6`).
 
-## 8. 仍未验证
+## 7. Smaller observations
 
-- live handoff / 重启后 startup 是否真的把 watcher tab 开起来（要重启 herdr 才能验证，会动用户的会话，没擅自做）。
-- goose 交互式对话时 TUI 会重绘（token 流、耗时行）→ 输出哈希会一直变 → 可能永远停在 `working`。目前只验证到「静止时报 idle」。若真出现，需要给哈希做 UI 壳层归一化。
-- `blocked` 仍是正则猜的（`allow?` / `approve` / `permission` / `press enter` …），没在真 goose 权限提示上验证过。
-- goose 有没有原生生命周期钩子能替代这套启发式状态机，未知。
+- A reported `idle` can display as `done` in `pane list` (both were seen in
+  separate runs). The mapping is not understood; [guess] it depends on whether a
+  client is attached. It does not affect the bridge.
+- Releasing a pane that has already been closed returns a `pane_not_found` error.
+  That is treated as "nothing to release", not as a failure, and logged as such.
+- The child of `pane.close` exits with code 3221225786 (0xC000013A =
+  STATUS_CONTROL_C_EXIT). Normal for a Ctrl-C'd child.
+
+## 8. Still unverified
+
+- Whether the startup hook really opens the watcher tab after a restart or a live
+  handoff. Verifying it means restarting herdr, which would disturb the user's
+  session, so it was left alone.
+- Whether goose's interactive turn keeps redrawing the TUI (token stream, elapsed
+  line) and therefore keeps the output hash changing, so the pane sticks at
+  `working` forever. Only the quiet case (`idle`) was verified. If it happens, the
+  hash needs to normalise the UI chrome away.
+- `blocked` is still a regex guess (`allow?` / `approve` / `permission` /
+  `press enter` …) and has never been checked against a real goose permission
+  prompt.
+- Whether goose has a native lifecycle hook that could replace this heuristic
+  state machine at all.

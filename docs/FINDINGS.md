@@ -291,3 +291,98 @@ the first step. Still unverified here: `--ref` pinning, the interactive
 confirmation prompt (`--yes` was passed, and the preview printed anyway),
 `min_herdr_version` rejection against an older binary, and `plugin action invoke`
 or `plugin log`, which need a server this session did not have.
+
+## 11. A restored plugin pane is a shell wearing the watcher's title
+
+Herdr restores the panes of the previous session *before* it runs the
+`[[startup]]` hooks. For a plugin pane that restore does not re-run the pane
+command: the pane comes back as the default shell in the recorded cwd, while
+`session.json` still records the `launch_argv` that created it. The pane title
+survives with it, and the pane title was the only thing the old guard trusted.
+
+| Question | Answer |
+| --- | --- |
+| Does a restored plugin pane run its pane command? | **No.** It is a shell (`pwsh.exe`) sitting in the plugin directory. |
+| What did the old guard do with it? | Logged `watcher pane already open; nothing to do`, exited 0, and the bridge never started — every pane stayed `agent_status: unknown` for the whole session. |
+| How are the two told apart? | `pane process-info`: a live watcher pane runs `node.exe`; the leftover runs `pwsh.exe`. |
+| Is the hook's stdout recoverable? | Yes — `herdr plugin log list` kept it. The install notes above say it stays empty; that is wrong once a hook has run. |
+
+Observed 2026-09-12, herdr 0.9.0, Windows, plugin 0.2.1, right after a Herdr
+restart that restored one shell pane and one plugin pane:
+
+```
+$ herdr pane list
+… {"label":"goose bridge","pane_id":"w3:p2",
+   "cwd":"C:\\Users\\kumax\\AppData\\Roaming\\herdr\\plugins\\github\\goose.bridge-f5f980f35af9",…}
+        ← the title is back, two seconds after startup
+
+$ herdr plugin log list
+{"command":["node","bin/autostart.js"],"event":"startup","exit_code":0,
+ "log_id":"plugin-log-1","plugin_id":"goose.bridge","status":"succeeded",
+ "stdout":"[goose-bridge:autostart] watcher pane already open; nothing to do\n"}
+
+$ Get-Process | Where-Object ProcessName -match 'node|goose|herdr'
+16924 goose
+17088 herdr                 ← and no node at all: the watcher was never running
+
+$ herdr pane process-info --pane w3:p2
+… {"foreground_processes":[{"name":"pwsh.exe","argv0":"C:\\Program Files\\PowerShell\\7\\pwsh.EXE",…}]}
+
+$ <data dir>/session.json
+      "cwd": "C:\\Users\\kumax\\AppData\\Roaming\\herdr\\plugins\\github\\goose.bridge-f5f980f35af9",
+      "label": "goose bridge",
+      "launch_argv": ["node","bin/bridge.js"]      ← recorded, never run
+```
+
+**Fix.** The guard asks `pane process-info` before it believes a title. A pane
+wearing the title, inside the plugin root, with no `node` among its foreground
+processes is a leftover: it is closed, then a fresh watcher pane is opened.
+`process-info` is read as three-state (`true` / `false` / no answer), so an
+unreadable API never gets a live pane closed, and a pane wearing the title from
+some other cwd is left alone. Replayed after the fix:
+
+```
+$ node bin/autostart.js          # the leftover from the restart was still open
+[goose-bridge:autostart] closed leftover pane w3:p2 (wears the pane title, runs no watcher)
+[goose-bridge:autostart] watcher pane open requested (tab, no focus)
+
+$ herdr pane process-info --pane w3:p3
+… {"foreground_processes":[{"name":"node.exe","argv0":"C:\\Program Files\\nodejs\\node.EXE","pid":1928}]}
+
+$ herdr pane read w3:p3 --source recent --lines 12
+[goose-bridge] watching (poll 2000ms, source custom:goose, agent goose)
+[goose-bridge] state dir C:\Users\kumax\AppData\Local\herdr\plugins\goose.bridge
+[goose-bridge] own pane w3:p3
+
+$ node bin/autostart.js          # a real watcher pane: the guard leaves it alone
+[goose-bridge:autostart] watcher already running in w3:p3; nothing to do
+```
+
+The second run is the input the hook sees whenever the pane really is the
+watcher, so the guard is idempotent in both directions: it closes what only
+looks like a watcher and spares what is one.
+
+## 12. Detection: what this session could not settle
+
+Same machine, same session, with the watcher fixed. No goose was running inside
+a herdr pane, so end-to-end detection could not be replayed:
+
+- **A goose session outside Herdr is invisible.** `goose.exe session -r` was
+  running under `pwsh.exe → wezterm-gui.exe → explorer.exe` — a WezTerm window —
+  while both herdr panes ran `pwsh.exe`. The bridge only reads herdr panes
+  (`pane list`), so there was nothing to report. Correct behaviour, worth knowing
+  before blaming the bridge.
+- **The title factor was not re-checked.** The pane that had hosted a goose
+  session reported `terminal_title` `kumax: C:\Users\kumax\code` — herdr's own
+  `user: cwd` default — but that session had already printed
+  `● session closed · 20260911_7`. That says nothing about a live session, so
+  §4 stands until it is replayed against a live goose-in-a-herdr-pane.
+- **Screen markers outlive the session.** `--dry-run` on that same pane reported
+  `screen=true`, from the banner of a session that had already closed. So
+  `GOOSE_BRIDGE_SCREEN=1` alone would call a dead pane a goose; the
+  title-plus-screen rule in §4 is what keeps that honest.
+
+```
+$ node bin/bridge.js --dry-run
+[goose-bridge]   w3:p1 goose=false title="kumax: C:\\Users\\kumax\\code" screen=true
+```

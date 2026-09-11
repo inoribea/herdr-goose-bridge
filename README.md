@@ -153,7 +153,19 @@ herdr plugin pane open --plugin goose.bridge --entrypoint watcher --placement ta
 ```
 
 The watcher then lives in a tab titled **goose bridge** and prints its state
-transitions there. `herdr plugin log list` stays empty, so read that pane.
+transitions there. Herdr also keeps the startup hook's own stdout, in
+`herdr plugin log list` — that is where a hook that decided not to open the pane
+says so, and how the failure in
+[docs/FINDINGS.md §11](docs/FINDINGS.md) was caught.
+
+**A restart restores the pane as a shell, not as the watcher.** Herdr brings the
+previous session's panes back before the startup hooks run, and a restored plugin
+pane is a plain shell sitting in the plugin directory: `session.json` still
+records `launch_argv`, but nothing re-runs it, while the pane title survives. The
+hook therefore never trusts a title: it asks `pane process-info`, closes a pane
+that wears the title inside the plugin root without running `node`, and opens a
+real watcher pane. Without that check the hook reported "watcher pane already
+open; nothing to do" on every start and the bridge stayed dead all session.
 
 ### Update / remove
 
@@ -212,6 +224,10 @@ Set these on the watcher pane (or in the shell that starts it).
 - **State is heuristic.** `working` / `idle` come from an output hash + quiet
   timer; `blocked` is regex guessing. If goose's TUI keeps redrawing during a
   turn, `idle` may never trigger.
+- **The watcher pane is reopened, not reattached.** Plugin v1 has no supervisor
+  for plugin panes, so after a Herdr restart the hook closes the leftover pane
+  and opens a fresh one. The new pane starts with no history of the states the
+  previous watcher reported.
 - **No native badge.** Plugin v1 excludes runtime action registration and native
   non-terminal UI, so this cannot become a first-class herdr integration with a
   session manifest. It is a bridge, not an integration.

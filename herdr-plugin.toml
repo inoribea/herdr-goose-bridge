@@ -1,6 +1,6 @@
 id = "goose.bridge"
 name = "goose state bridge"
-version = "0.2.1"
+version = "0.2.2"
 min_herdr_version = "0.9.0"
 description = "Report goose agent lifecycle state (idle/working/blocked) into Herdr panes"
 platforms = ["linux", "macos", "windows"]

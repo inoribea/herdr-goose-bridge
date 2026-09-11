@@ -17,6 +17,9 @@
  *   6. Reports use a monotonic, timestamp-derived `--seq`: herdr keeps a
  *      persistent per-(pane, source, agent) high-water mark and silently drops
  *      anything at or below it, so a counter restarting at 1 is lost forever.
+ *   7. The startup hook proves a pane is running the watcher before believing
+ *      a pane title: herdr restores a plugin pane as a plain shell wearing the
+ *      same title, which shipped as "watcher already open" and a dead bridge.
  */
 
 import { existsSync, readFileSync } from 'node:fs';
@@ -149,6 +152,22 @@ check('reports: panes are only ever reported, never driven', () => {
       );
     }
   }
+});
+
+check('autostart: a pane title is not proof that the watcher is running', () => {
+  const source = read('bin/autostart.js');
+  assert(
+    /process-info/.test(source),
+    'bin/autostart.js never asks `pane process-info`; a restored plugin pane wears the same title as a live one, so the title alone reports a dead bridge as running',
+  );
+  assert(
+    /foreground_processes/.test(source),
+    'bin/autostart.js does not read foreground_processes; that is the only field that says what a pane actually runs',
+  );
+  assert(
+    /PLUGIN_ROOT/.test(source) && /'close'/.test(source),
+    'bin/autostart.js closes leftover panes without a plugin-root check; it would close any pane that happens to wear the title',
+  );
 });
 
 const failed = results.filter(([, status]) => status.startsWith('FAIL'));

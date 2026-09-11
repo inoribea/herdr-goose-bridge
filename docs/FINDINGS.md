@@ -174,7 +174,37 @@ The watcher also skips its own pane by comparing against `HERDR_PANE_ID`
 - The child of `pane.close` exits with code 3221225786 (0xC000013A =
   STATUS_CONTROL_C_EXIT). Normal for a Ctrl-C'd child.
 
-## 8. Still unverified
+## 8. A freshly seen pane is never reported as `working`
+
+The first version started the quiet timer the moment a pane was first tracked,
+so `quietFor` was ~0 and every pane it had just discovered was reported
+`working`, then `idle` one quiet window later. The restart log shows it on a
+goose pane that was sitting idle at its prompt:
+
+```
+[goose-bridge] w2:p1: (none) -> working
+[goose-bridge] w2:p1: working -> idle
+```
+
+Fixed at 18:33: the first observation is stored as a baseline and does not count
+as a change (`primed` / `changes` in `classify()`), and while nothing has changed
+inside the quiet window `classify()` returns nothing rather than guessing.
+Verified against a real scratch pane, with a separate `--source` so the running
+watcher was untouched (`POLL_MS=1000`, `IDLE_AFTER_MS=4000`):
+
+```
+[goose-bridge] w2:p3: first sight, waiting for the screen to settle before guessing
+[goose-bridge] w2:p3: (none) -> idle        ← an idle pane no longer flashes working
+    ... activity injected into the pane with `pane send-text` ...
+[goose-bridge] w2:p3: idle -> working
+[goose-bridge] w2:p3: working -> idle
+```
+
+A pane that is genuinely working still reports `working` within one poll: the
+report is deferred by a poll, never suppressed. The scratch pane was closed
+after the run.
+
+## 9. Still unverified
 
 - Live handoff (a new server taking over while a client stays attached) is still
   untested. The docs say the startup hook runs there too; only a full restart has

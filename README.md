@@ -34,6 +34,11 @@ State is inferred from the pane output: changing output = `working`, quiet for
 `GOOSE_BRIDGE_IDLE_AFTER_MS` = `idle`, and a prompt-looking tail
 (`allow?`, `approve`, `permission`, `[y/N]`, `press enter` …) = `blocked`.
 
+The first time a pane is seen, its output is only a baseline, so nothing is
+reported until the screen either changes or stays quiet for the whole idle
+window. Without that rule every newly seen pane announced `working` for the
+length of the quiet window, including panes that had been idle all along.
+
 ## Layout
 
 | File | Role |
@@ -97,7 +102,7 @@ Set these on the watcher pane (or in the shell that starts it).
 | `GOOSE_BRIDGE_SOURCE` | `custom:goose` | `--source`; keep stable, it keys the seq watermark |
 | `GOOSE_BRIDGE_AGENT` | `goose` | `--agent` label |
 | `GOOSE_BRIDGE_PROC` | `^(goose\|goose\.exe\|goosed\|goosed\.exe)$` | basename regex for the foreground program |
-| `GOOSE_BRIDGE_TITLE` | `goose` | pane-title regex (the working signal) |
+| `GOOSE_BRIDGE_TITLE` | `goose` | pane-title regex (one of the two detection factors) |
 | `GOOSE_BRIDGE_SCREEN_PATTERN` | `goose is ready\|Enter to send\|Ctrl\+J newline\|\( ?O\)>` | markers required for a title-only match |
 | `GOOSE_BRIDGE_SCREEN` | `0` | `1` = read every pane's screen, not just title matches |
 | `GOOSE_BRIDGE_MATCH_CMDLINE` | `0` | `1` = also match `process-info` cmdlines (wrapper launches) |

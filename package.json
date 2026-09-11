@@ -1,6 +1,6 @@
 {
   "name": "herdr-goose-bridge",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Herdr plugin that reports goose agent lifecycle state (idle/working/blocked) into Herdr panes",
   "license": "MIT",

@@ -320,15 +320,37 @@ function classify(paneId, preloaded) {
   }
   const st =
     track.get(paneId) ||
-    { hash: '', since: Date.now(), state: '', seq: 0, lastBlocked: 0 };
+    {
+      hash: '',
+      since: Date.now(),
+      state: '',
+      seq: 0,
+      lastBlocked: 0,
+      primed: false,
+      changes: 0,
+    };
   const h = crypto.createHash('sha1').update(text).digest('hex');
   if (h !== st.hash) {
+    // The first observation is a baseline, not a change: there is nothing to
+    // compare it against yet, so it must not count as activity.
+    if (st.primed) {
+      st.changes += 1;
+    } else {
+      st.primed = true;
+      log(`${paneId}: first sight, waiting for the screen to settle before guessing`);
+    }
     st.hash = h;
     st.since = Date.now();
   }
   const quietFor = Date.now() - st.since;
 
+  // Verified live 2026-09-11: classifying a freshly seen pane as `working`
+  // because quietFor starts at 0 put a false "working" badge on panes that had
+  // been idle all along — a restored goose pane flashed working for the whole
+  // quiet window after every restart. Until something has actually changed there
+  // is no evidence either way, so report nothing and let the quiet window decide.
   let state = quietFor >= CFG.idleAfterMs ? 'idle' : 'working';
+  if (!st.changes && quietFor < CFG.idleAfterMs) state = null;
   let message = null;
 
   const tail = tailLines(text, 12);
@@ -381,6 +403,8 @@ function tick() {
     const r = classify(pane.id, textFor(pane.id));
     if (!r) continue;
     const { st, state, message } = r;
+    // null = nothing observed yet; classify() knows when it has grounds to speak
+    if (!state) continue;
     if (state === st.state) continue;
     const prev = st.state || '(none)';
     // Monotonic across restarts. herdr keeps a per-(pane,source,agent)

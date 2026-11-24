@@ -87,7 +87,7 @@ command it will run:
 Plugin install preview:
   id: goose.bridge
   name: goose state bridge
-  version: 0.2.2
+  version: 0.3.0
   source: inoribea/herdr-goose-bridge
   commit: 6390d8409e8a93c9bfdf61fccc68165c361ab8c9
   actions: 3
@@ -222,6 +222,8 @@ Set these on the watcher pane (or in the shell that starts it).
 | `GOOSE_BRIDGE_PANES` | *(empty)* | force pane ids (debugging) |
 | `GOOSE_BRIDGE_BLOCKED` | built-in set | `\|`-separated regexes that mean "waiting for input" |
 | `GOOSE_BRIDGE_BLOCKED_DEBOUNCE_MS` | `1500` | don't call a prompt `blocked` too early |
+| `GOOSE_BRIDGE_RESUME` | `0` | **experimental.** `1` = attach `goose session -r --session-id <id>` to state reports. Not verified to restore on herdr 0.9.5 (see [docs/FINDINGS.md §15](docs/FINDINGS.md)) |
+| `GOOSE_BRIDGE_GOOSE_BIN` | `goose` | goose command name on PATH, used for the resume command and the session lookup |
 | `GOOSE_BRIDGE_PANE_FIELDS` | `foreground_command,foreground_process,command,process,program,executable,argv0` | legacy pane-record fallback |
 
 ## Known limitations
@@ -251,7 +253,7 @@ Set these on the watcher pane (or in the shell that starts it).
 
 This plugin is listed on [herdr.dev/plugins](https://herdr.dev/plugins/): a
 repository card for `inoribea/herdr-goose-bridge` with a manifest row of
-`goose state bridge` 0.2.2. Herdr's plugin marketplace indexes public GitHub
+`goose state bridge` 0.3.0. Herdr's plugin marketplace indexes public GitHub
 repositories that carry the topic `herdr-plugin` and at least one
 `herdr-plugin.toml` with parseable required metadata on the default branch.
 There is no submission form and no review queue: the index refreshes every 30

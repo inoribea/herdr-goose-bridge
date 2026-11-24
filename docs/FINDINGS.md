@@ -486,3 +486,65 @@ $ herdr server stop
 Not tested: detection on a live goose pane, the resume command from
 `pane report-agent` (0.9.2), and whether the startup hook still opens the
 watcher pane on 0.9.5. These remain unverified.
+
+## 15. Resume: accepted by herdr, not run after a server restart (herdr 0.9.5)
+
+The bridge can attach a resume command to a state report
+(`pane report-agent ... -- goose session -r --session-id <id>`, herdr 0.9.2+).
+This section records what was observed when it was tried on herdr 0.9.5,
+2026-11-24. Result: **herdr accepts the report, but did not run the resume
+command after a server restart.** The feature stays opt-in
+(`GOOSE_BRIDGE_RESUME=1`) until that is explained.
+
+### 15.1 herdr accepts the report
+
+```
+$ herdr pane report-agent w6:p1 --source rt3 --agent goose --state working --seq <ms>
+exit=0
+$ herdr pane get w6:p1       # "agent":"goose","agent_status":"working"
+$ herdr pane report-agent w6:p1 --source rt3 --agent goose --state idle --seq <ms+1000> -- goose session -r --session-id 20261124_5
+exit=0
+$ herdr pane get w6:p1       # "agent":"goose","agent_status":"done"
+```
+
+The resume argv is not shown by `pane get`. herdr does not echo it back.
+
+### 15.2 A restart did not run it
+
+```
+$ herdr server stop          # server was running with w6:p1 holding the report above
+$ herdr server               # started again, same session
+$ herdr pane list
+  w6:p1  "agent_status":"unknown", no "agent" field, cwd D:\goose
+$ herdr pane read w6:p1 --source recent --lines 25
+  oh-my-posh prompt only ("D:\goose ... v3.12.10"); no goose output
+$ herdr pane process-info --pane w6:p1
+  foreground: pwsh.exe -NoExit (a plain shell)
+$ Get-CimInstance Win32_Process -Filter "Name='goose.exe'"
+  only the Goose desktop app and its helpers; no `goose session` process
+```
+
+`session.json` after the restart holds the layout and `cwd` of w6:p1 and no
+`agent` or resume field. A copy taken before the stop is not kept in the repo.
+
+### 15.3 What this does not settle
+
+- Why the restart did not run the resume. Candidates, none tested: herdr only
+  resumes agents that were in a particular state when the server stopped; the
+  agent record is cleared on stop (the `agent` field was gone after restart);
+  a pane created by `workspace create` is not treated as an agent session.
+- Whether a restart restores an agent that herdr itself launched. This was not
+  tested.
+- Any run where a restart does resume. None has been observed.
+
+### 15.4 Notes from the test itself
+
+- A report made in a PowerShell one-liner with a stale `--seq` (seconds
+  instead of milliseconds) was silently dropped, as the high-water mark
+  predicts. The bridge uses `Date.now() * 1000`, which is correct; the test
+  script was wrong.
+- Some reports on freshly created panes were not applied in the same
+  one-liner while the same command applied on another run. The cause was not
+  isolated; the runs that failed were not re-checked one by one.
+
+Unverified: everything in 15.3.

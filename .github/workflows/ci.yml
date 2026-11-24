@@ -33,6 +33,9 @@ jobs:
       - name: Static checks (manifest, invariants)
         run: npm run verify
 
+      - name: Unit tests (resume argv, session pick)
+        run: npm run test
+
       - name: Dry run without a Herdr socket
         # --dry-run must fail loudly or print what it sees; it must never hang
         # waiting for a socket that CI does not have.

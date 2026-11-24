@@ -245,6 +245,11 @@ Set these on the watcher pane (or in the shell that starts it).
   2026-11-24, see [docs/FINDINGS.md §14](docs/FINDINGS.md)). The 0.9.0 observation
   that it stayed on the pane no longer holds; on 0.9.0 it is still what was
   recorded in §3.
+- **Resume is experimental and not working yet.** `GOOSE_BRIDGE_RESUME=1` makes
+  the bridge attach `goose session -r --session-id <id>` to state reports. herdr
+  0.9.5 accepts the report, but a server restart did **not** run the command in
+  the one test made (no goose process came back, the pane stayed a shell). The
+  cause is unknown. It is off by default; see [docs/FINDINGS.md §15](docs/FINDINGS.md).
 - **Windows multi-machine SSH is not covered** by anything here.
 - Not a `herdr integration install` target: goose has no herdr screen manifest,
   which would be core work, not plugin work.

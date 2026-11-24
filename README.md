@@ -1,11 +1,12 @@
-# goose-bridge — a Herdr plugin that gives goose panes real agent state
+﻿# goose-bridge — a Herdr plugin that gives goose panes real agent state
 
 <p align="center">
   <img src="assets/cover.svg" alt="A goose pane is recognised by the goose bridge watcher pane, which reports idle, working or blocked to Herdr" width="880">
 </p>
 
 Herdr cannot detect goose on its own: goose is a line-mode CLI, so on Windows the
-foreground process of a goose pane is still `powershell.exe` (verified — see
+foreground process of a goose pane is still `powershell.exe` on herdr 0.9.0, and
+`pwsh.exe` (PowerShell 7) on herdr 0.9.5, which made it the default shell (verified — see
 [docs/FINDINGS.md](docs/FINDINGS.md)). Herdr's own "supported agents" list therefore has no
 goose entry, and goose panes stay `unknown`.
 
@@ -63,7 +64,7 @@ hook only opens the pane; `[[panes]] watcher` is the daemon.
 
 ## Requirements
 
-- Herdr ≥ 0.9.0 (built and verified against 0.9.0, protocol 22)
+- Herdr ≥ 0.9.0 (built and verified against 0.9.0, protocol 22; re-checked against 0.9.5, protocol 22 — see [docs/FINDINGS.md §14](docs/FINDINGS.md))
 - Node ≥ 22 (verified on v24; the plugin calls the `herdr` binary through
   `HERDR_BIN_PATH`, so no herdr libraries are needed)
 - `git` on `PATH` for `herdr plugin install`, which clones the repository
@@ -86,7 +87,7 @@ command it will run:
 Plugin install preview:
   id: goose.bridge
   name: goose state bridge
-  version: 0.2.1
+  version: 0.2.2
   source: inoribea/herdr-goose-bridge
   commit: 6390d8409e8a93c9bfdf61fccc68165c361ab8c9
   actions: 3
@@ -172,10 +173,11 @@ open; nothing to do" on every start and the bridge stayed dead all session.
 
 ### Update / remove
 
-There is no `plugin update` in plugin v1: reinstall from GitHub to refresh the
-managed checkout.
+Since herdr 0.9.4, `herdr plugin update` refreshes plugins installed from GitHub
+(all at once, or by name). Reinstalling from GitHub also works.
 
 ```powershell
+herdr plugin update goose.bridge                          # herdr ≥ 0.9.4
 herdr plugin install inoribea/herdr-goose-bridge --yes   # update in place
 herdr plugin uninstall inoribea/herdr-goose-bridge       # remove (the id works too)
 ```
@@ -237,9 +239,10 @@ Set these on the watcher pane (or in the shell that starts it).
 - **`--seq` is sticky.** herdr ignores non-increasing `--seq` per
   (pane, source, agent) and `release-agent` does not reset it, hence the
   timestamp-based sequence. Never reuse `GOOSE_BRIDGE_SOURCE` for another agent.
-- **`release-agent` does not clear the pane's displayed agent name.** Verified:
-  the last known `agent` / `agent_status` stay on the pane, and there is no CLI
-  command to clear them (`clear-agent-authority` is socket-only).
+- **`release-agent` cleared the displayed agent name on herdr 0.9.5** (re-tested
+  2026-11-24, see [docs/FINDINGS.md §14](docs/FINDINGS.md)). The 0.9.0 observation
+  that it stayed on the pane no longer holds; on 0.9.0 it is still what was
+  recorded in §3.
 - **Windows multi-machine SSH is not covered** by anything here.
 - Not a `herdr integration install` target: goose has no herdr screen manifest,
   which would be core work, not plugin work.
@@ -248,7 +251,7 @@ Set these on the watcher pane (or in the shell that starts it).
 
 This plugin is listed on [herdr.dev/plugins](https://herdr.dev/plugins/): a
 repository card for `inoribea/herdr-goose-bridge` with a manifest row of
-`goose state bridge` 0.2.1. Herdr's plugin marketplace indexes public GitHub
+`goose state bridge` 0.2.2. Herdr's plugin marketplace indexes public GitHub
 repositories that carry the topic `herdr-plugin` and at least one
 `herdr-plugin.toml` with parseable required metadata on the default branch.
 There is no submission form and no review queue: the index refreshes every 30

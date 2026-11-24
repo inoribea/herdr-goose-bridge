@@ -27,6 +27,7 @@
 'use strict';
 
 const { spawnSync } = require('node:child_process');
+const { resumeArgvFor, pickSession } = require('./resume');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -100,6 +101,13 @@ const CFG = {
       'allow\\?|approve|permission|\\[y/N\\]|\\(y/n\\)|press enter|enter to continue|waiting for (your )?input|continue\\?'
   ),
   blockedDebounceMs: num(process.env.GOOSE_BRIDGE_BLOCKED_DEBOUNCE_MS, 1500),
+  // EXPERIMENTAL, off by default. Attaches a resume command
+  // (goose session -r --session-id <id>) to state reports. On herdr 0.9.5 a
+  // server restart did NOT run it (docs/FINDINGS.md §15), so it is opt-in until
+  // that is explained. Enable with GOOSE_BRIDGE_RESUME=1. Needs herdr >= 0.9.2.
+  resume: process.env.GOOSE_BRIDGE_RESUME === '1',
+  // goose binary name as it must appear on PATH (herdr rejects paths)
+  gooseBin: process.env.GOOSE_BRIDGE_GOOSE_BIN || 'goose',
   dryRun: process.argv.includes('--dry-run'),
 };
 
@@ -269,7 +277,35 @@ function readPane(id) {
   return herdr(['pane', 'read', id, '--source', 'recent', '--lines', String(CFG.lines)]);
 }
 
-function report(paneId, state, seq, message) {
+// ------------------------------------------------------------------ resume
+
+// Cache per pane: the session list is only read when the pane's state changes,
+// and never more than once per pane per RESUME_TTL_MS.
+const RESUME_TTL_MS = 60 * 1000;
+const resumeCache = new Map(); // paneId -> {at, argv}
+
+function resumeFor(paneId, cwd) {
+  if (!CFG.resume) return null;
+  const hit = resumeCache.get(paneId);
+  if (hit && Date.now() - hit.at < RESUME_TTL_MS) return hit.argv;
+  let argv = null;
+  try {
+    const out = spawnSync(
+      CFG.gooseBin,
+      ['session', 'list', '--format', 'json', '--working_dir', cwd, '-l', '5'],
+      { encoding: 'utf8', timeout: 15000 },
+    );
+    if (out.status === 0 && out.stdout) {
+      argv = resumeArgvFor(CFG.gooseBin, pickSession(out.stdout, cwd));
+    }
+  } catch {
+    argv = null;
+  }
+  resumeCache.set(paneId, { at: Date.now(), argv });
+  return argv;
+}
+
+function report(paneId, state, seq, message, resumeArgv) {
   const args = [
     'pane',
     'report-agent',
@@ -284,6 +320,8 @@ function report(paneId, state, seq, message) {
     String(seq),
   ];
   if (message) args.push('--message', message);
+  // resume argv goes after `--` and must be the last thing on the command line
+  if (resumeArgv && resumeArgv.length) args.push('--', ...resumeArgv);
   if (CFG.dryRun) {
     log('[dry-run]', args.join(' '));
     return;
@@ -422,7 +460,17 @@ function tick() {
     // A millisecond timestamp is monotonic by construction (1.7e15 < 2^53).
     st.seq = Math.max(st.seq + 1, Date.now() * 1000);
     try {
-      report(pane.id, state, st.seq, state === 'blocked' ? message : undefined);
+      // Resume is looked up on state changes only (and cached), so the session
+      // list is not read on every poll. A pane without a usable session just
+      // reports its state, as before.
+      const resumeArgv = resumeFor(pane.id, pane.raw?.cwd);
+      report(
+        pane.id,
+        state,
+        st.seq,
+        state === 'blocked' ? message : undefined,
+        resumeArgv,
+      );
       st.state = state;
       log(`${pane.id}: ${prev} -> ${state}${message ? ` (${message})` : ''}`);
     } catch (e) {

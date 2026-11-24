@@ -183,6 +183,27 @@ check('detection: the default title pattern carries goose\'s own marker', () => 
   );
 });
 
+check('resume: the resume command is an argv array, never a shell string', () => {
+  const source = read(BRIDGE);
+  const resume = read('bin/resume.js');
+  assert(
+    /args\.push\('--',\s*\.\.\.resumeArgv\)/.test(source),
+    'bin/bridge.js does not pass the resume command as argv after `--`; herdr reads everything after `--` as the resume command',
+  );
+  assert(
+    !/resume[^\n]*(exec|execSync|shell:\s*true)/i.test(source + resume),
+    'the resume command is built with a shell; herdr requires a plain argv (no shell, no paths)',
+  );
+  assert(
+    /argv\[0\]\)/.test(resume) && /\[\\\\\/\]/.test(resume),
+    'bin/resume.js does not refuse a path as the command name; herdr requires a plain command name on PATH',
+  );
+  assert(
+    /\\u0000-\\u001f/.test(resume) && /'/.test(resume),
+    'bin/resume.js does not reject apostrophes or control characters in resume arguments',
+  );
+});
+
 const failed = results.filter(([, status]) => status.startsWith('FAIL'));
 for (const [status, name] of results) console.log(`${status.padEnd(4)} ${name}`);
 console.log(`\n${results.length - failed.length}/${results.length} checks passed`);

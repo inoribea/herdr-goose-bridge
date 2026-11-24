@@ -1,6 +1,6 @@
 {
   "name": "herdr-goose-bridge",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "private": true,
   "description": "Herdr plugin that reports goose agent lifecycle state (idle/working/blocked) into Herdr panes",
   "license": "MIT",
@@ -23,9 +23,10 @@
     "node": ">=22"
   },
   "scripts": {
-    "check": "npm run syntax && npm run verify",
-    "syntax": "node --check bin/bridge.js && node --check bin/autostart.js && node --check bin/release-all.js",
+    "check": "npm run syntax && npm run verify && npm run test",
+    "syntax": "node --check bin/bridge.js && node --check bin/autostart.js && node --check bin/release-all.js && node --check bin/resume.js",
     "verify": "node scripts/verify.mjs",
+    "test": "node --test scripts/test-resume.mjs",
     "probe": "node bin/bridge.js --dry-run",
     "release-all": "node bin/release-all.js",
     "autostart": "node bin/autostart.js"

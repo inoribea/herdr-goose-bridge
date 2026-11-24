@@ -453,3 +453,36 @@ This is the first replay in this file where a goose pane actually carried
 shell repainting its prompt (a killed pane, a shell that prints nothing after
 goose returns). That is the false-positive case for the two-factor rule and it
 has not been observed either way.
+
+## 14. Re-test on herdr 0.9.5 (2026-11-24)
+
+Herdr was updated from 0.9.0 to 0.9.5 with `herdr update`. Every command
+below ran against the 0.9.5 binary
+(`C:\Users\inori\.herdr\packages\standalone\releases\0.9.5-x86_64-pc-windows-msvc\herdr.exe`),
+not the 0.9.0 binary that was still first on the shell PATH of that session.
+
+| Claim | Result on 0.9.5 |
+| --- | --- |
+| CLI reports the right version | `herdr 0.9.5`, protocol 22 |
+| `pane report-agent` / `release-agent` flags | unchanged; `--help` matches the script |
+| Release clears the displayed agent name (§3) | **Yes.** After release, `agent` disappears and `agent_status` returns to `unknown`. §3 describes the 0.9.0 behaviour only. |
+| Windows plugin pane shell (§4, §13) | `pwsh.exe` (PowerShell 7) is the foreground of a plain pane. The default-shell change is from 0.9.2. |
+| Dry run | `node bin/bridge.js --dry-run` with `HERDR_BIN_PATH` set lists both panes and their foreground processes. |
+| Release all | `node bin/release-all.js` released every pane, including the user's own pane `w2:p1`. That is what the cleanup action does; it is not safe to run casually on a shared machine. |
+
+Commands used (on the default session, server started for the test only):
+
+```
+$ herdr update
+installed 0.9.5
+$ herdr server                         # headless, started for the test and stopped after
+$ herdr pane report-agent w3:p1 --source probe-src --agent probe-agent --state working --seq <ms>
+$ herdr pane list                      # w3:p1: "agent":"probe-agent","agent_status":"working"
+$ herdr pane release-agent w3:p1 --source probe-src --agent probe-agent --seq <ms+1>
+$ herdr pane list                      # w3:p1: "agent_status":"unknown", no "agent" field
+$ herdr server stop
+```
+
+Not tested: detection on a live goose pane, the resume command from
+`pane report-agent` (0.9.2), and whether the startup hook still opens the
+watcher pane on 0.9.5. These remain unverified.
